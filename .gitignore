@@ -1,0 +1,10 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.env
+db.sqlite3
+backend/media/
+backend/staticfiles/
+.pytest_cache/
+*.tsbuildinfo

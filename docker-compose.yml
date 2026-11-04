@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-transit}
+      POSTGRES_USER: ${POSTGRES_USER:-transit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?défini dans .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-transit}"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: { context: ./backend, dockerfile: ../infra/docker/backend.Dockerfile }
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    depends_on: { db: { condition: service_healthy } }
+    volumes: [media:/app/media]
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application -b 0.0.0.0:8000 --workers 3"
+
+  frontend:
+    build: { context: ./frontend, dockerfile: ../infra/docker/frontend.Dockerfile }
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["8080:80"]
+    volumes: ["./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro", "media:/media:ro"]
+    depends_on: [backend, frontend]
+
+volumes:
+  pgdata:
+  media:
