@@ -14,6 +14,8 @@ DEBUG = env("DJANGO_DEBUG", "0") == "1"
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me" if DEBUG else None)
 if not SECRET_KEY:
     raise RuntimeError("DJANGO_SECRET_KEY est obligatoire en production.")
+if not DEBUG and (SECRET_KEY.startswith("changez-moi") or len(SECRET_KEY) < 32):
+    raise RuntimeError("DJANGO_SECRET_KEY doit être une valeur aléatoire d'au moins 32 caractères (la valeur d'exemple est refusée).")
 
 ALLOWED_HOSTS = [h for h in env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CORS_ALLOWED_ORIGINS = [o for o in env("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o]
@@ -21,6 +23,9 @@ CSRF_TRUSTED_ORIGINS = [o for o in env("CSRF_TRUSTED_ORIGINS", "").split(",") if
 
 # Clé dédiée à la signature des QR Codes (distincte de SECRET_KEY).
 QR_SIGNING_KEY = env("QR_SIGNING_KEY", SECRET_KEY)
+
+# URL publique de l'application (liens de suivi imprimés sur les billets). Ex. https://billets.exemple.com
+PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", "").rstrip("/")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -41,6 +46,7 @@ INSTALLED_APPS = [
     "apps.manifests",
     "apps.audit",
     "apps.reports",
+    "apps.tracking",
 ]
 
 MIDDLEWARE = [
@@ -115,6 +121,9 @@ REST_FRAMEWORK = {
         "user": env("THROTTLE_USER", "600/min"),
         "login": env("THROTTLE_LOGIN", "10/min"),
         "scan": env("THROTTLE_SCAN", "120/min"),
+        "track_ingest": env("THROTTLE_TRACK_INGEST", "60/min"),
+        "track_public": env("THROTTLE_TRACK_PUBLIC", "60/min"),
+        "track_ip": env("THROTTLE_TRACK_IP", "600/min"),
     },
     "EXCEPTION_HANDLER": "apps.accounts.exceptions.api_exception_handler",
 }

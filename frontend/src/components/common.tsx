@@ -112,3 +112,13 @@ export function isoToLocalInput(iso: string, tz: string): string {
   );
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
+
+/** « il y a 3 min » à partir d'une date ISO. */
+export function ago(iso?: string | null, now = Date.now()): string {
+  if (!iso) return "—";
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 45) return "à l'instant";
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h ${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`;
+  return `il y a ${Math.floor(s / 86400)} j`;
+}

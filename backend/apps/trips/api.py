@@ -29,8 +29,8 @@ class TripSerializer(serializers.ModelSerializer):
         model = Trip
         fields = ["id", "reference", "agency", "agency_name", "origin", "destination", "departure_at",
                   "arrival_estimated_at", "bus", "bus_plate", "driver_ids", "drivers_detail", "capacity",
-                  "price", "currency", "status", "status_label", "notes", "closed_at", "sold", "created_at"]
-        read_only_fields = ["id", "capacity", "status", "closed_at", "created_at"]
+                  "price", "currency", "status", "status_label", "notes", "closed_at", "sold", "tracking_code", "created_at"]
+        read_only_fields = ["id", "capacity", "status", "closed_at", "tracking_code", "created_at"]
         extra_kwargs = {"currency": {"required": False}, "reference": {"required": False}}
 
     def get_drivers_detail(self, obj):
@@ -77,7 +77,8 @@ class TripSerializer(serializers.ModelSerializer):
             validated["reference"] = _next_reference(tenant)
         elif Trip.objects.filter(tenant=tenant, reference=validated["reference"]).exists():
             raise serializers.ValidationError({"reference": "Cette référence existe déjà."})
-        trip = Trip.objects.create(capacity=bus.capacity, created_by=request.user, **validated)
+        from apps.tracking.services import new_tracking_code
+        trip = Trip.objects.create(capacity=bus.capacity, created_by=request.user, tracking_code=new_tracking_code(), **validated)
         for d in drivers:
             TripDriver.objects.create(trip=trip, driver=d)
         return trip

@@ -14,6 +14,7 @@ ALL_PERMISSIONS = {
     "boarding.scan", "boarding.view",
     "manifest.view", "manifest.generate", "manifest.finalize",
     "report.view",
+    "tracking.manage", "tracking.view",
 }
 
 DEFAULT_ROLE_PERMISSIONS = {
@@ -22,10 +23,11 @@ DEFAULT_ROLE_PERMISSIONS = {
         "agency.manage", "fleet.view", "trip.manage", "trip.view",
         "ticket.create", "ticket.view", "ticket.cancel", "ticket.reprint",
         "boarding.view", "manifest.view", "manifest.generate", "manifest.finalize", "report.view",
+        "tracking.manage", "tracking.view",
     },
-    Role.TICKET_AGENT: {"fleet.view", "trip.view", "ticket.create", "ticket.view", "ticket.reprint"},
+    Role.TICKET_AGENT: {"fleet.view", "trip.view", "ticket.create", "ticket.view", "ticket.reprint", "tracking.view"},
     Role.BOARDING_AGENT: {"trip.view", "boarding.scan", "boarding.view", "manifest.view"},
-    Role.DRIVER: {"trip.view", "manifest.view"},
+    Role.DRIVER: {"trip.view", "manifest.view", "tracking.manage", "tracking.view"},
 }
 
 

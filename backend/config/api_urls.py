@@ -8,6 +8,7 @@ from apps.fleet.api import BusViewSet, DriverViewSet
 from apps.manifests import api as manifests
 from apps.reports import api as reports
 from apps.tenants import api as platform
+from apps.tracking import api as tracking
 from apps.ticketing.api import TicketViewSet
 from apps.trips.api import TripViewSet
 
@@ -40,6 +41,14 @@ urlpatterns = [
     path("trips/<int:trip_id>/manifests/preview/", manifests.PreviewManifestView.as_view()),
     path("trips/<int:trip_id>/manifests/finalize/", manifests.FinalizeManifestView.as_view()),
     path("trips/<int:trip_id>/stats/", reports.TripStatsView.as_view()),
+    path("trips/<int:trip_id>/tracking/", tracking.TripTrackingView.as_view()),
+    path("trips/<int:trip_id>/tracking/start/", tracking.StartTrackingView.as_view()),
+    path("trips/<int:trip_id>/tracking/stop/", tracking.StopTrackingView.as_view()),
+    path("tracking/ingest/", tracking.IngestView.as_view()),
+    path("tracking/end/", tracking.EndView.as_view()),
+    path("tracking/live/", tracking.LiveFleetView.as_view()),
+    path("tracking/my-trips/", tracking.MyTripsView.as_view()),
+    path("public/track/<str:code>/", tracking.PublicTrackView.as_view()),
     path("manifests/<int:pk>/", manifests.ManifestDetailView.as_view()),
     path("manifests/<int:pk>/pdf/", manifests.ManifestPdfView.as_view()),
     path("reports/dashboard/", reports.DashboardView.as_view()),

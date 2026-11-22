@@ -18,7 +18,7 @@ export interface Trip {
   id: number; reference: string; agency: number; agency_name: string; origin: string; destination: string;
   departure_at: string; arrival_estimated_at: string | null; bus: number; bus_plate: string; capacity: number;
   price: string; currency: string; status: TripStatus; status_label: string; notes: string; sold: number;
-  drivers_detail: { id: number; full_name: string }[];
+  drivers_detail: { id: number; full_name: string }[]; tracking_code: string | null;
 }
 export type TripStatus = "DRAFT" | "OPEN" | "BOARDING" | "CLOSED" | "COMPLETED" | "CANCELLED" | "SUSPENDED";
 export interface Ticket {

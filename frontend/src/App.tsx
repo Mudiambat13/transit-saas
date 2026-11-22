@@ -9,6 +9,9 @@ import TripsPage from "./features/trips/TripsPage";
 import TripDetailPage from "./features/trips/TripDetailPage";
 import { SellTicketPage, TicketsPage } from "./features/ticketing/TicketPages";
 import ScannerPage from "./features/boarding/ScannerPage";
+import DriverTrackingPage from "./features/tracking/DriverTrackingPage";
+import LiveMapPage from "./features/tracking/LiveMapPage";
+import PublicTrackPage from "./features/tracking/PublicTrackPage";
 import { Alert } from "@mui/material";
 
 /** Garde de route : l'UI se limite à masquer ; chaque endpoint reste protégé côté serveur. */
@@ -24,6 +27,7 @@ function Guard({ platform, perm }: { platform?: boolean; perm?: string }) {
 
 function Home() {
   const { me, can } = useAuth();
+  if (me?.role === "DRIVER" && can("tracking.manage")) return <Navigate to="/tracking" replace />;
   if (can("report.view")) return <DashboardPage />;
   if (can("ticket.create")) return <Navigate to="/tickets/new" replace />;
   if (can("boarding.scan")) return <Navigate to="/boarding" replace />;
@@ -34,6 +38,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/suivi/:code" element={<PublicTrackPage />} />
       <Route element={<AppLayout />}>
         <Route element={<Guard platform />}>
           <Route path="/platform" element={<PlatformDashboard />} />
@@ -48,6 +53,8 @@ export default function App() {
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/new" element={<SellTicketPage />} />
           <Route path="/boarding" element={<ScannerPage />} />
+          <Route path="/tracking" element={<DriverTrackingPage />} />
+          <Route path="/tracking/live" element={<LiveMapPage />} />
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="/agencies" element={<AgenciesPage />} />
           <Route path="/users" element={<UsersPage />} />

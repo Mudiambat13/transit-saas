@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Transit Suivi</string>
+    <string name="notif_channel">Suivi du bus</string>
+    <string name="notif_title">Suivi du bus actif</string>
+</resources>

@@ -29,6 +29,8 @@ class Trip(TenantOwnedModel):
     currency = models.CharField(max_length=3, default="USD")
     status = models.CharField(max_length=12, choices=TripStatus.choices, default=TripStatus.DRAFT, db_index=True)
     notes = models.TextField(blank=True)
+    # Code aléatoire du lien public de suivi (page passagers) ; aucun lien avec le jeton QR du billet.
+    tracking_code = models.CharField(max_length=24, unique=True, null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")

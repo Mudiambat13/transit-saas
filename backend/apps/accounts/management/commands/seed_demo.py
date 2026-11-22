@@ -37,6 +37,7 @@ class Command(BaseCommand):
             ("admin@trans-katanga.local", Role.COMPANY_ADMIN, "Admin Compagnie"),
             ("guichet@trans-katanga.local", Role.TICKET_AGENT, "Agent Guichet"),
             ("embarquement@trans-katanga.local", Role.BOARDING_AGENT, "Agent Embarquement"),
+            ("chauffeur@trans-katanga.local", Role.DRIVER, "Patrice Kabongo"),
         ]:
             u, _ = User.objects.get_or_create(email=email, defaults={"full_name": name})
             u.set_password(PASSWORD)
@@ -46,6 +47,9 @@ class Command(BaseCommand):
         bus, _ = Bus.objects.get_or_create(tenant=tenant, plate="KAT-1234", defaults={"brand": "Scania", "model": "Marcopolo", "capacity": 50})
         bus.generate_seats()
         driver, _ = Driver.objects.get_or_create(tenant=tenant, full_name="Patrice Kabongo", defaults={"phone": "+243 970 111 222"})
+        if driver.user_id is None:  # compte lié : permet de tester le suivi GPS depuis la page « Mode chauffeur »
+            driver.user = User.objects.get(email="chauffeur@trans-katanga.local")
+            driver.save(update_fields=["user"])
         bus2, _ = Bus.objects.get_or_create(tenant=tenant, plate="KAT-5678", defaults={"brand": "Yutong", "capacity": 45})
         bus2.generate_seats()
 
@@ -57,4 +61,4 @@ class Command(BaseCommand):
                 TripDriver.objects.create(trip=trip, driver=driver)
         self.stdout.write(self.style.SUCCESS(f"Démo prête. Mot de passe de tous les comptes : {PASSWORD}"))
         self.stdout.write("  Super Admin : superadmin@transit.local")
-        self.stdout.write("  Compagnie   : admin@ / guichet@ / embarquement@trans-katanga.local")
+        self.stdout.write("  Compagnie   : admin@ / guichet@ / embarquement@ / chauffeur@trans-katanga.local")

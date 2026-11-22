@@ -1,6 +1,7 @@
 """Ticket PDF imprimable (reportlab : aucune dépendance système)."""
 import io
 
+from django.conf import settings
 from django.utils import timezone as djtz
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A5
@@ -78,6 +79,8 @@ def render_ticket_pdf(ticket):
     c.setFillColor(colors.HexColor("#64748b"))
     c.drawString(12 * mm, 9 * mm, "Présentez ce QR Code à l'embarquement. Billet strictement personnel, non remboursable après embarquement.")
     c.drawString(12 * mm, 5.5 * mm, f"Émis le {local_dt(djtz.now(), tenant.timezone):%d/%m/%Y %H:%M}")
+    if settings.PUBLIC_BASE_URL and trip.tracking_code:
+        c.drawRightString(w - 12 * mm, 5.5 * mm, f"Suivi du bus : {settings.PUBLIC_BASE_URL}/suivi/{trip.tracking_code}")
     if ticket.status == "CANCELLED":
         c.saveState()
         c.setFillColor(colors.Color(0.8, 0, 0, alpha=0.25))

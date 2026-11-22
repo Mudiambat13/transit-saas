@@ -34,6 +34,28 @@ Le manifeste est un **instantané JSON** (`Manifest.snapshot`) ; le PDF est rend
 ## Hors connexion (décision MVP)
 Scan **connecté uniquement**. Le scanner détecte la perte de réseau, n'affiche **jamais** « validé » sans confirmation du serveur, et propose la saisie manuelle de la référence. Un mode hors ligne n'est pas implémenté : il ne pourrait garantir l'unicité entre plusieurs appareils sans coordination. S'il est ajouté : validation « provisoire », file locale, synchronisation avec `idempotency_key` (déjà supportée par l'API) et règle de conflit explicite (premier horodatage serveur gagne, doublons signalés).
 
+## Suivi GPS du bus (v2, étape web)
+Le téléphone du chauffeur (ou de son adjoint) envoie la position du bus pendant un voyage.
+
+- **Session de suivi** (`TrackingSession`) : démarrée par un utilisateur autorisé (`tracking.manage`) sur un voyage ouvert / en embarquement / clôturé (en route). Elle génère un **jeton appareil** propre à la session, montré une seule fois et stocké **haché** (SHA-256). Un seul téléphone actif par voyage : en démarrer un second remplace le premier (l'ancien reçoit 410). La session se termine automatiquement quand le voyage est terminé, annulé ou suspendu.
+- **Chauffeur** : ne peut suivre que les voyages auxquels il est affecté (fiche chauffeur liée à son compte). Un voyage non affecté est invisible pour lui (404).
+- **Ingestion** `POST /api/v1/tracking/ingest/` : authentifiée par le seul jeton (`X-Tracking-Token`), limitée par jeton. Lots de 200 points maximum, **rejouables** (unicité session + heure d'origine : un point déjà reçu est ignoré), heure d'origine conservée pour les envois différés après une zone sans réseau. Coordonnées invalides, (0,0), dates futures ou de plus de 2 jours : rejetées.
+- **Anomalies** : un point impliquant plus de 220 km/h depuis le dernier point valide est marqué *suspect*, conservé mais ignoré pour la position et le tracé.
+- **Téléphone** : échantillonnage ≤ 1 point / 15 s, file locale persistante (localStorage) vidée par lots, reprise automatique au retour du réseau, verrou d'écran (Wake Lock) pour garder le GPS actif.
+- **Lecture** : carte compagnie (`/tracking/live`), état « sans signal » après 5 min. **Page publique passagers** `/suivi/<code>` : code aléatoire par voyage, sans connexion, ne révèle ni plaque, ni chauffeur, ni billets ; position masquée si le dernier signal a plus de 30 min ou si le voyage est terminé ; inaccessible si la compagnie est suspendue.
+- **Conservation** : `python manage.py purge_tracking --days 90` (à planifier). Durée à fixer avec la compagnie ; informer les chauffeurs du suivi (vie privée).
+- **Limite majeure du MVP web** : un navigateur ne localise plus le téléphone quand l'écran est verrouillé ou la page quittée. Le suivi fiable de bout en bout exige l'**application Android** (service en arrière-plan), qui utilisera la même API d'ingestion sans modification.
+- Fond de carte : tuiles OpenStreetMap (usage modéré). Pour un fort trafic, utiliser un fournisseur de tuiles dédié.
+
+## Application Android de suivi (v3)
+
+Dossier `android/` : application native Kotlin, sans dépendance tierce (HttpURLConnection, LocationManager, org.json), minSdk 24.
+- `TrackingService` est un service de premier plan (`foregroundServiceType=location`, notification permanente avec bouton Arrêter, wake lock partiel) : la position continue écran verrouillé.
+- Le cœur (`core/`, Kotlin pur) reproduit `trackerEngine.ts` : un point toutes les 15 s, précision ≤ 500 m, file persistante sur disque (5 000 points max), envoi par lots de 100, seuls les lots confirmés sont retirés, 400 → lot écarté, 401/410 → arrêt, 5xx/429/réseau → nouvel essai.
+- Authentification : login JWT une fois pour démarrer ; ensuite seul le jeton appareil (`X-Tracking-Token`) sert à l'envoi et à `POST /tracking/end/`. Le service redémarre seul (START_STICKY) tant qu'un jeton est stocké.
+- HTTPS obligatoire en release (`network_security_config`) ; `http://` seulement en debug.
+- Limites : constructeurs agressifs (Tecno/Infinix/Xiaomi…) peuvent tuer le service malgré tout (réglages batterie à faire par l'utilisateur) ; pas de position sans GPS/réseau ; pas de FusedLocation (Google Play Services) pour rester sans dépendance — précision parfois moindre en intérieur.
+
 ## Compromis connus
 - Un utilisateur = une compagnie active (contrainte en base).
 - Révocation de refresh token : à la déconnexion le client supprime ses jetons ; pas de liste noire côté serveur (à ajouter avec `token_blacklist`).

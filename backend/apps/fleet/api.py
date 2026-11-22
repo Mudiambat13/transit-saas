@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.tenancy import TenantModelViewSet, get_tenant
+from apps.accounts.models import User
 from apps.audit import service as audit
 
 from .models import Bus, Driver, Seat
@@ -45,9 +46,26 @@ class BusSerializer(serializers.ModelSerializer):
 
 
 class DriverSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True, default=None)
+
     class Meta:
         model = Driver
-        fields = ["id", "full_name", "phone", "license_number", "is_active"]
+        fields = ["id", "full_name", "phone", "license_number", "is_active", "user", "user_email"]
+
+    def validate_user(self, user):
+        """Le compte lié doit appartenir à la même compagnie (et ne pas déjà servir à un autre chauffeur)."""
+        if user is None:
+            return None
+        tenant = get_tenant(self.context["request"])
+        if not user.memberships.filter(tenant=tenant, is_active=True).exists():
+            raise serializers.ValidationError("Ce compte n'existe pas dans votre compagnie.")
+        taken = Driver.objects.filter(user=user)
+        if self.instance:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError("Ce compte est déjà lié à un autre chauffeur.")
+        return user
 
 
 class BusViewSet(TenantModelViewSet):

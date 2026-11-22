@@ -52,6 +52,7 @@ export default function TripDetailPage() {
           <Button key={a.key} variant={a.variant} color={a.danger ? "error" : "primary"} onClick={() => setAct(a)}>{a.label}</Button>
         ))}
         {can("ticket.create") && ["OPEN", "BOARDING"].includes(t.status) && <Button component={Link} to={`/tickets/new?trip=${t.id}`} variant="contained" color="success">Vendre un billet</Button>}
+        {can("tracking.view") && ["BOARDING", "CLOSED"].includes(t.status) && <Button component={Link} to={`/tracking/live?trip=${t.id}`} variant="outlined">Suivi en direct</Button>}
         {can("boarding.scan") && t.status === "BOARDING" && <Button component={Link} to={`/boarding?trip=${t.id}`} variant="contained" color="secondary">Ouvrir le scanner</Button>}
       </Stack>
       {t.status === "CLOSED" && <Alert severity="success" sx={{ mb: 2 }}>Embarquement clôturé. Le manifeste définitif est archivé (onglet Manifestes).</Alert>}

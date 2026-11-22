@@ -10,6 +10,7 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,  # noqa: F405
     "DEFAULT_THROTTLE_CLASSES": [],
+    "DEFAULT_THROTTLE_RATES": {**REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"], "track_ingest": "100000/min", "track_public": "100000/min", "track_ip": "100000/min", "scan": "100000/min"},  # noqa: F405
 }
 # Base fichier (et non :memory:) : les tests de concurrence utilisent plusieurs threads ;
 # `timeout` fait attendre SQLite au lieu de lever « database is locked ».

@@ -15,6 +15,8 @@ import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
+import MapIcon from "@mui/icons-material/Map";
+import GpsFixedIcon from "@mui/icons-material/GpsFixed";
 import { useAuth } from "../services/auth";
 
 interface Item { to: string; label: string; icon: JSX.Element; perm?: string }
@@ -30,12 +32,17 @@ const COMPANY: Item[] = [
   { to: "/trips", label: "Voyages", icon: <RouteIcon />, perm: "trip.view" },
   { to: "/tickets", label: "Billets", icon: <ConfirmationNumberIcon />, perm: "ticket.view" },
   { to: "/boarding", label: "Embarquement", icon: <QrCodeScannerIcon />, perm: "boarding.scan" },
+  { to: "/tracking", label: "Mode chauffeur (GPS)", icon: <GpsFixedIcon />, perm: "tracking.manage" },
+  { to: "/tracking/live", label: "Suivi en direct", icon: <MapIcon />, perm: "tracking.view" },
   { to: "/fleet", label: "Flotte", icon: <BusIcon />, perm: "fleet.view" },
   { to: "/agencies", label: "Agences", icon: <StoreIcon />, perm: "agency.manage" },
   { to: "/users", label: "Utilisateurs", icon: <PeopleIcon />, perm: "user.manage" },
   { to: "/audit", label: "Journal", icon: <HistoryIcon />, perm: "report.view" },
   { to: "/settings", label: "Compagnie", icon: <SettingsIcon />, perm: "company.manage" },
 ];
+const ROLE_LABELS: Record<string, string> = {
+  COMPANY_ADMIN: "Admin compagnie", AGENCY_MANAGER: "Resp. d'agence", TICKET_AGENT: "Billetterie", BOARDING_AGENT: "Embarquement", DRIVER: "Chauffeur",
+};
 const W = 244;
 
 export default function AppLayout() {
@@ -54,9 +61,9 @@ export default function AppLayout() {
         <Typography variant="caption" sx={{ opacity: 0.75 }}>{platform ? "Administration plateforme" : me?.tenant?.name}</Typography>
       </Box>
       <Divider sx={{ borderColor: "rgba(255,255,255,.15)" }} />
-      <List sx={{ flex: 1, px: 1 }}>
+      <List sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 1 }}>
         {items.map((i) => (
-          <ListItemButton key={i.to} component={NavLink} to={i.to} end={i.to === "/" || i.to === "/platform"} onClick={() => setOpen(false)}
+          <ListItemButton key={i.to} component={NavLink} to={i.to} end={i.to === "/" || i.to === "/platform" || i.to === "/tracking"} onClick={() => setOpen(false)}
             sx={{ borderRadius: 2, mb: 0.5, color: "inherit", "&.active": { bgcolor: "rgba(255,255,255,.18)" }, "&:hover": { bgcolor: "rgba(255,255,255,.1)" } }}>
             <ListItemIcon sx={{ color: "inherit", minWidth: 38 }}>{i.icon}</ListItemIcon>
             <ListItemText primary={i.label} />
@@ -66,7 +73,7 @@ export default function AppLayout() {
       <Divider sx={{ borderColor: "rgba(255,255,255,.15)" }} />
       <Box sx={{ p: 2 }}>
         <Typography variant="body2" noWrap>{me?.full_name || me?.email}</Typography>
-        <Chip size="small" label={platform ? "Super Admin" : me?.role?.replace("_", " ")} sx={{ mt: 0.5, bgcolor: "rgba(255,255,255,.18)", color: "white" }} />
+        <Chip size="small" label={platform ? "Super Admin" : (me?.role ? ROLE_LABELS[me.role] ?? me.role : "")} sx={{ mt: 0.5, bgcolor: "rgba(255,255,255,.18)", color: "white" }} />
         <ListItemButton onClick={async () => { await logout(); nav("/login"); }} sx={{ mt: 1, borderRadius: 2, color: "inherit" }}>
           <ListItemIcon sx={{ color: "inherit", minWidth: 36 }}><LogoutIcon fontSize="small" /></ListItemIcon>
           <ListItemText primary="Se déconnecter" />

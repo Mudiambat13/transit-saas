@@ -20,9 +20,16 @@ cd frontend
 npm install
 npm run dev                         # http://localhost:5173 (proxy /api → :8000)
 ```
-Comptes de démo (mot de passe `Demo12345!`) : `superadmin@transit.local` (Super Admin), `admin@trans-katanga.local`, `guichet@trans-katanga.local`, `embarquement@trans-katanga.local`.
+Comptes de démo (mot de passe `Demo12345!`) : `superadmin@transit.local` (Super Admin), `admin@trans-katanga.local`, `guichet@trans-katanga.local`, `embarquement@trans-katanga.local`, `chauffeur@trans-katanga.local` (suivi GPS).
 
 La caméra du scanner exige **HTTPS ou localhost** (règle des navigateurs). Pour tester sur téléphone, servez l'app en HTTPS.
+
+## Suivi GPS du bus
+1. *Flotte → Chauffeurs* : lier la fiche du chauffeur (ou de son adjoint) à son compte utilisateur (rôle « Chauffeur / contrôleur »), puis l'affecter au voyage.
+2. Le chauffeur ouvre l'application sur son téléphone (HTTPS obligatoire), menu **Mode chauffeur (GPS)**, choisit le voyage et démarre le suivi. Téléphone branché, écran allumé, page ouverte.
+3. La compagnie suit les bus sur **Suivi en direct**. Le lien passagers (`/suivi/<code>`) s'affiche sur la fiche de suivi ; il est aussi imprimé sur les billets PDF si `PUBLIC_BASE_URL` est défini.
+4. Planifier la purge : `python manage.py purge_tracking --days 90`.
+Pour un suivi fiable **écran verrouillé**, utilisez l'application Android du dossier `android/` (même API, voir `android/README.md`). Détails et limites : `docs/ARCHITECTURE.md`.
 
 ## Production (Docker Compose)
 ```bash
@@ -38,9 +45,10 @@ Voir `.env.example` (toutes commentées). `DJANGO_SECRET_KEY` est obligatoire ho
 
 ## Tests
 ```bash
-cd backend && pytest                       # 54 tests (SQLite) : isolation, billetterie, concurrence, scan, manifestes, permissions
+cd backend && pytest                       # 79 tests (SQLite) : isolation, billetterie, concurrence, scan, manifestes, permissions
 cd backend && TEST_DB=postgres POSTGRES_HOST=localhost POSTGRES_PASSWORD=... pytest   # mêmes tests sur PostgreSQL (compte avec droit CREATEDB)
-cd frontend && npm test     # fuseaux horaires, connexion
+cd android && ./gradlew testDebugUnitTest   # 15 tests du cœur Kotlin (file, envoi par lots) — nécessite Android Studio/SDK
+cd frontend && npm test     # fuseaux horaires, connexion, moteur de suivi GPS (13 tests)
 cd frontend && npm run build
 ```
 
@@ -62,5 +70,6 @@ Planifier la sauvegarde (cron) et tester la restauration régulièrement.
 - Scan connecté uniquement (voir ARCHITECTURE.md) ; pas de paiement en ligne ni de vente publique.
 - Rendu PDF vérifié ; le scanner doit être testé sur vos téléphones Android/navigateurs cibles (caméra, HTTPS).
 - Suite complète (dont concurrence : ventes d'un même siège, capacité, scans simultanés) validée sur SQLite **et** PostgreSQL 16. Rejouez-la sur la version de PostgreSQL de votre hébergeur.
+- Suivi GPS : la page web ne localise plus le téléphone écran verrouillé ; l'application Android (`android/`) la remplace, mais son APK n'a **pas** été compilé ni testé sur un appareil dans l'environnement de développement (voir `android/README.md`). Les fonds de carte OpenStreetMap exigent un accès Internet.
 - Pas d'export CSV, pas de RLS PostgreSQL, pas de liste noire de refresh tokens (cf. compromis).
 - Politique de conservation des données personnelles à définir avec la compagnie pilote.

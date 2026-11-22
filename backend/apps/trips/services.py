@@ -62,6 +62,9 @@ def transition(trip_id, target, *, tenant, actor, reason=""):
         raise BusinessError("Des passagers sont déjà embarqués : le voyage ne peut plus être annulé.", code="already_boarded")
     trip.status = target
     trip.save(update_fields=["status"])
+    if target in (TripStatus.COMPLETED, TripStatus.CANCELLED, TripStatus.SUSPENDED):
+        from apps.tracking.services import end_sessions_for_trip
+        end_sessions_for_trip(trip)
     audit.log(f"trip.{str(target).lower()}", actor=actor, tenant=tenant, entity="Trip", entity_id=trip.id,
               previous=previous, reason=reason)
     return trip

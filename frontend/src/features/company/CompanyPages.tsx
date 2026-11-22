@@ -62,6 +62,7 @@ export function FleetPage() {
   const { can } = useAuth();
   const [tab, setTab] = useState(0);
   const edit = can("fleet.manage");
+  const accounts = useLoad(() => (can("user.manage") ? get<any>("/users/") : Promise.resolve(null)), []);
   return (
     <>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}><Tab label="Bus" /><Tab label="Chauffeurs" /></Tabs>
@@ -73,8 +74,12 @@ export function FleetPage() {
           toPayload={(f, isNew) => ({ ...f, capacity: Number(f.capacity), ...(isNew ? { status: f.status || "ACTIVE" } : {}) })} />
       ) : (
         <CrudPage<Driver> key="drv" title="Chauffeurs" endpoint="/drivers/" canEdit={edit} newLabel="Nouveau chauffeur"
-          columns={[{ header: "Nom", render: (d) => <b>{d.full_name}</b> }, { header: "Téléphone", render: (d) => d.phone || "—" }, { header: "Permis", render: (d) => d.license_number || "—" }]}
-          fields={[{ name: "full_name", label: "Nom complet", required: true }, { name: "phone", label: "Téléphone" }, { name: "license_number", label: "N° de permis" }, { name: "is_active", label: "Actif", type: "switch" }]} />
+          columns={[{ header: "Nom", render: (d) => <b>{d.full_name}</b> }, { header: "Téléphone", render: (d) => d.phone || "—" }, { header: "Permis", render: (d) => d.license_number || "—" }, { header: "Compte (suivi GPS)", render: (d: any) => d.user_email || "—" }]}
+          fields={[{ name: "full_name", label: "Nom complet", required: true }, { name: "phone", label: "Téléphone" }, { name: "license_number", label: "N° de permis" },
+            ...(can("user.manage") ? [{ name: "user", label: "Compte utilisateur lié", type: "select" as const, helper: "Nécessaire pour que ce chauffeur suive ses voyages depuis son téléphone",
+              options: [{ value: "", label: "Aucun" }, ...((accounts.data?.results ?? []).map((u: any) => ({ value: u.id, label: `${u.full_name || u.email} (${u.email})` })))] }] : []),
+            { name: "is_active", label: "Actif", type: "switch" }]}
+          toPayload={(f) => { const p: any = { ...f }; if ("user" in p) p.user = p.user === "" || p.user == null ? null : p.user; delete p.user_email; return p; }} />
       )}
     </>
   );
