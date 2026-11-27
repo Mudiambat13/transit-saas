@@ -33,16 +33,17 @@ class Command(BaseCommand):
         agency, _ = Agency.objects.get_or_create(tenant=tenant, name="Agence Lubumbashi", defaults={"city": "Lubumbashi"})
         Agency.objects.get_or_create(tenant=tenant, name="Agence Kolwezi", defaults={"city": "Kolwezi"})
 
-        for email, role, name in [
-            ("admin@trans-katanga.local", Role.COMPANY_ADMIN, "Admin Compagnie"),
-            ("guichet@trans-katanga.local", Role.TICKET_AGENT, "Agent Guichet"),
-            ("embarquement@trans-katanga.local", Role.BOARDING_AGENT, "Agent Embarquement"),
-            ("chauffeur@trans-katanga.local", Role.DRIVER, "Patrice Kabongo"),
+        for email, role, name, ag in [
+            ("admin@trans-katanga.local", Role.COMPANY_ADMIN, "Admin Compagnie", None),
+            ("gestionnaire@trans-katanga.local", Role.AGENCY_MANAGER, "Gestionnaire Lubumbashi", agency),
+            ("guichet@trans-katanga.local", Role.TICKET_AGENT, "Agent Guichet", agency),
+            ("embarquement@trans-katanga.local", Role.BOARDING_AGENT, "Agent Embarquement", agency),
+            ("chauffeur@trans-katanga.local", Role.DRIVER, "Patrice Kabongo", agency),
         ]:
             u, _ = User.objects.get_or_create(email=email, defaults={"full_name": name})
             u.set_password(PASSWORD)
             u.save()
-            Membership.objects.get_or_create(user=u, tenant=tenant, defaults={"role": role})
+            Membership.objects.get_or_create(user=u, tenant=tenant, defaults={"role": role, "agency": ag})
 
         bus, _ = Bus.objects.get_or_create(tenant=tenant, plate="KAT-1234", defaults={"brand": "Scania", "model": "Marcopolo", "capacity": 50})
         bus.generate_seats()
@@ -61,4 +62,4 @@ class Command(BaseCommand):
                 TripDriver.objects.create(trip=trip, driver=driver)
         self.stdout.write(self.style.SUCCESS(f"Démo prête. Mot de passe de tous les comptes : {PASSWORD}"))
         self.stdout.write("  Super Admin : superadmin@transit.local")
-        self.stdout.write("  Compagnie   : admin@ / guichet@ / embarquement@ / chauffeur@trans-katanga.local")
+        self.stdout.write("  Compagnie   : admin@ / gestionnaire@ / guichet@ / embarquement@ / chauffeur@trans-katanga.local")

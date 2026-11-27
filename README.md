@@ -20,11 +20,12 @@ cd frontend
 npm install
 npm run dev                         # http://localhost:5173 (proxy /api → :8000)
 ```
-Comptes de démo (mot de passe `Demo12345!`) : `superadmin@transit.local` (Super Admin), `admin@trans-katanga.local`, `guichet@trans-katanga.local`, `embarquement@trans-katanga.local`, `chauffeur@trans-katanga.local` (suivi GPS).
+Comptes de démo (mot de passe `Demo12345!`) : `superadmin@transit.local` (Super Admin), `admin@trans-katanga.local`, `guichet@trans-katanga.local`, `embarquement@trans-katanga.local`, `chauffeur@trans-katanga.local` (suivi GPS), `gestionnaire@trans-katanga.local` (responsable d'agence : gère son équipe).
 
 La caméra du scanner exige **HTTPS ou localhost** (règle des navigateurs). Pour tester sur téléphone, servez l'app en HTTPS.
 
 ## Suivi GPS du bus
+Côté agence (page « Suivi en direct ») : carte vivante, filtres, bus cliquables, statistiques (distance, durée, vitesses), rejeu du parcours, suivi automatique du bus, lien passagers copiable ou partageable par WhatsApp. Côté chauffeur : vitesse, cap, précision, carte personnelle, journal d'envoi et état du réseau.
 1. *Flotte → Chauffeurs* : lier la fiche du chauffeur (ou de son adjoint) à son compte utilisateur (rôle « Chauffeur / contrôleur »), puis l'affecter au voyage.
 2. Le chauffeur ouvre l'application sur son téléphone (HTTPS obligatoire), menu **Mode chauffeur (GPS)**, choisit le voyage et démarre le suivi. Téléphone branché, écran allumé, page ouverte.
 3. La compagnie suit les bus sur **Suivi en direct**. Le lien passagers (`/suivi/<code>`) s'affiche sur la fiche de suivi ; il est aussi imprimé sur les billets PDF si `PUBLIC_BASE_URL` est défini.
@@ -45,7 +46,7 @@ Voir `.env.example` (toutes commentées). `DJANGO_SECRET_KEY` est obligatoire ho
 
 ## Tests
 ```bash
-cd backend && pytest                       # 79 tests (SQLite) : isolation, billetterie, concurrence, scan, manifestes, permissions
+cd backend && pytest                       # 93 tests (SQLite) : isolation, billetterie, concurrence, scan, manifestes, permissions
 cd backend && TEST_DB=postgres POSTGRES_HOST=localhost POSTGRES_PASSWORD=... pytest   # mêmes tests sur PostgreSQL (compte avec droit CREATEDB)
 cd android && ./gradlew testDebugUnitTest   # 15 tests du cœur Kotlin (file, envoi par lots) — nécessite Android Studio/SDK
 cd frontend && npm test     # fuseaux horaires, connexion, moteur de suivi GPS (13 tests)

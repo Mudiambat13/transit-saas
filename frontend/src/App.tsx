@@ -5,6 +5,7 @@ import { useAuth } from "./services/auth";
 import LoginPage from "./features/auth/LoginPage";
 import { CompaniesPage, PlansPage, PlatformAuditPage, PlatformDashboard } from "./features/platform/PlatformPages";
 import { AgenciesPage, AuditPage, DashboardPage, FleetPage, SettingsPage, UsersPage } from "./features/company/CompanyPages";
+import { PasswordPage } from "./features/account/PasswordPage";
 import TripsPage from "./features/trips/TripsPage";
 import TripDetailPage from "./features/trips/TripDetailPage";
 import { SellTicketPage, TicketsPage } from "./features/ticketing/TicketPages";
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="/agencies" element={<AgenciesPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/account/password" element={<PasswordPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

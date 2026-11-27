@@ -91,16 +91,29 @@ const ROLES = [
 ];
 
 export function UsersPage() {
+  const { can } = useAuth();
+  const isAdmin = can("user.manage");
   const agencies = useLoad(() => get<any>("/agencies/"));
+  const agencyList: Agency[] = agencies.data?.results ?? [];
+  // Le responsable d'agence ne gère que son équipe (le serveur l'impose aussi) : rôles limités, agence imposée.
+  const roles = isAdmin ? ROLES : ROLES.filter((r) => ["TICKET_AGENT", "BOARDING_AGENT", "DRIVER"].includes(r.value));
   return (
-    <CrudPage<any> title="Utilisateurs" subtitle="Les permissions sont appliquées côté serveur selon le rôle" endpoint="/users/" canEdit newLabel="Nouvel utilisateur"
-      columns={[{ header: "Nom", render: (u) => <b>{u.full_name || "—"}</b> }, { header: "E-mail", render: (u) => u.email }, { header: "Rôle", render: (u) => ROLES.find((r) => r.value === u.role)?.label ?? "—" }, { header: "Statut", render: (u) => (u.is_active ? "Actif" : "Désactivé") }]}
+    <CrudPage<any> title={isAdmin ? "Utilisateurs" : "Mon équipe"}
+      subtitle={isAdmin ? "L'administrateur gère tous les comptes ; les permissions sont appliquées côté serveur selon le rôle" : "Vous gérez les agents de billetterie, d'embarquement et les chauffeurs de votre agence"}
+      endpoint="/users/" canEdit newLabel={isAdmin ? "Nouvel utilisateur" : "Nouveau membre"}
+      columns={[{ header: "Nom", render: (u) => <b>{u.full_name || "—"}</b> }, { header: "E-mail", render: (u) => u.email },
+        { header: "Rôle", render: (u) => ROLES.find((r) => r.value === u.role)?.label ?? "—" },
+        { header: "Agence", render: (u) => agencyList.find((a) => a.id === u.agency)?.name ?? (u.agency ? `#${u.agency}` : "Toute la compagnie") },
+        { header: "Statut", render: (u) => (u.is_active ? "Actif" : "Désactivé") }]}
       fields={[{ name: "full_name", label: "Nom complet" }, { name: "email", label: "E-mail", type: "email", required: true }, { name: "phone", label: "Téléphone" },
-        { name: "role", label: "Rôle", type: "select", options: ROLES, required: true },
-        { name: "agency", label: "Agence (périmètre)", type: "select", options: [{ value: "", label: "Toute la compagnie" }, ...((agencies.data?.results ?? []).map((a: Agency) => ({ value: a.id, label: a.name })))] },
-        { name: "password", label: "Mot de passe", type: "password", helper: "Laisser vide pour ne pas le modifier" }, { name: "is_active", label: "Compte actif", type: "switch" }]}
+        { name: "role", label: "Rôle", type: "select", options: roles, required: true },
+        ...(isAdmin ? [{ name: "agency", label: "Agence (périmètre)", type: "select" as const, helper: "Obligatoire pour un responsable d'agence et un agent de billetterie",
+          options: [{ value: "", label: "Toute la compagnie" }, ...agencyList.map((a) => ({ value: a.id, label: a.name }))] }] : []),
+        { name: "password", label: "Mot de passe", type: "password", helper: "Mot de passe provisoire à communiquer ; la personne peut ensuite le changer. Laisser vide pour ne pas le modifier" },
+        { name: "is_active", label: "Compte actif", type: "switch" }]}
       toPayload={(f, isNew) => {
-        const p: any = { ...f, agency: f.agency === "" || f.agency == null ? null : f.agency };
+        const p: any = { ...f };
+        if (isAdmin) p.agency = f.agency === "" || f.agency == null ? null : f.agency; else delete p.agency;
         if (!p.password) delete p.password;
         if (!isNew) delete p.email;
         return p;

@@ -295,3 +295,20 @@ def test_invented_tokens_are_throttled_per_ip(monkeypatch):
     codes = [client.post("/api/v1/tracking/ingest/", {"points": []}, format="json", HTTP_X_TRACKING_TOKEN=f"fake-{i}").status_code for i in range(5)]
     cache.clear()
     assert codes[:3] == [401, 401, 401] and 429 in codes[3:]
+
+
+def test_tracking_detail_exposes_stats_and_replay(world_a, boarding_trip):
+    from datetime import timedelta
+    from django.utils import timezone
+    from apps.tracking import services
+    from apps.tracking.models import LocationPoint, TrackingSession
+    w, trip = world_a, boarding_trip
+    sess, _ = services.start_session(tenant=w.tenant, actor=w.admin, trip_id=trip.id)
+    now = timezone.now()
+    for i in range(4):  # ~0,0045° de latitude ≈ 0,5 km toutes les 60 s => ~30 km/h
+        LocationPoint.objects.create(tenant=w.tenant, trip=trip, session=sess, lat=-11.66 + 0.0045 * i, lon=27.47, speed_kmh=30 + i,
+                                     recorded_at=now - timedelta(minutes=4 - i))
+    d = w.admin_c.get(f"/api/v1/trips/{trip.id}/tracking/").json()
+    assert d["stats"]["points"] == 4 and 1.3 < d["stats"]["distance_km"] < 1.7
+    assert d["stats"]["max_speed_kmh"] == 33 and d["stats"]["avg_speed_kmh"] in range(25, 40)
+    assert len(d["replay"]) == 4 and d["replay"][0][2] == 30 and d["bus"]

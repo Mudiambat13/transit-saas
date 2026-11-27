@@ -97,6 +97,11 @@ class TripTrackingView(APIView):
             "last": services.point_dict(last) if last else None,
             "stale": services.is_stale(last) if session and session.is_active else None,
             "trail": [[p.lat, p.lon] for p in trail],
+            "replay": [[p.lat, p.lon, p.speed_kmh, p.recorded_at] for p in trail],
+            "stats": services.trip_stats(trail),
+            "departure_at": trip.departure_at,
+            "drivers": [d.full_name for d in trip.drivers.all()],
+            "bus": trip.bus.plate,
             "suspect_points": LocationPoint.objects.filter(trip=trip, suspect=True).count(),
         })
 
@@ -110,7 +115,7 @@ class LiveFleetView(APIView):
     def get(self, request):
         m = request.user.membership
         sessions = scope_by_agency(
-            TrackingSession.objects.filter(tenant=m.tenant, ended_at__isnull=True).select_related("trip", "trip__bus"), m, "trip__agency")
+            TrackingSession.objects.filter(tenant=m.tenant, ended_at__isnull=True).select_related("trip", "trip__bus").prefetch_related("trip__drivers"), m, "trip__agency")
         if m.role == "DRIVER":
             sessions = sessions.filter(trip__drivers__user=request.user)
         out = []
@@ -118,7 +123,8 @@ class LiveFleetView(APIView):
             last = services.latest_point(s.trip)
             out.append({
                 "trip_id": s.trip_id, "reference": s.trip.reference, "route": f"{s.trip.origin} → {s.trip.destination}",
-                "bus": s.trip.bus.plate, "status": s.trip.status,
+                "bus": s.trip.bus.plate, "status": s.trip.status, "departure_at": s.trip.departure_at, "started_at": s.started_at,
+                "drivers": [d.full_name for d in s.trip.drivers.all()],
                 "last": services.point_dict(last) if last else None, "stale": services.is_stale(last),
             })
         return Response(out)

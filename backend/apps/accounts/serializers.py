@@ -8,6 +8,10 @@ from apps.tenants.models import Tenant
 
 from .models import Membership, Role, User
 from .permissions import ALL_PERMISSIONS, permissions_for
+
+# Rôles qu'un responsable d'agence peut créer/gérer dans son agence. Les rôles d'encadrement restent réservés à l'administrateur.
+TEAM_ROLES = {Role.TICKET_AGENT, Role.BOARDING_AGENT, Role.DRIVER}
+AGENCY_BOUND_ROLES = {Role.AGENCY_MANAGER, Role.TICKET_AGENT}
 from .tenancy import TenantPrimaryKeyRelatedField
 
 
@@ -84,6 +88,38 @@ class UserSerializer(serializers.ModelSerializer):
         validate_password(value)
         return value
 
+    def validate(self, attrs):
+        """Règles de délégation : l'administrateur gère tout ; le responsable d'agence gère son équipe, rien de plus."""
+        attrs = super().validate(attrs)
+        request = self.context["request"]
+        actor = request.user.membership
+        is_admin = "user.manage" in permissions_for(actor)
+        target = self._membership(self.instance) if self.instance else None
+        role = attrs.get("role", target.role if target else None)
+        agency = attrs["agency"] if "agency" in attrs else (target.agency if target else None)
+        errors = {}
+        if not is_admin:
+            if actor.agency_id is None:
+                raise serializers.ValidationError("Votre compte n'est rattaché à aucune agence : vous ne pouvez pas gérer d'utilisateurs.")
+            if role not in TEAM_ROLES or (target and target.role not in TEAM_ROLES):
+                errors["role"] = "Vous pouvez gérer uniquement les agents de billetterie, d'embarquement et les chauffeurs de votre agence."
+            if "extra_permissions" in attrs or "revoked_permissions" in attrs:
+                errors["extra_permissions"] = "Seul l'administrateur peut modifier les permissions."
+            attrs["agency"] = agency = actor.agency  # toujours dans son agence, quoi qu'envoie le client
+        elif role in AGENCY_BOUND_ROLES and agency is None:
+            errors["agency"] = "L'agence est obligatoire pour ce rôle."
+        if self.instance is not None and self.instance.pk == request.user.pk:
+            # Pas d'auto-promotion ni d'auto-verrouillage.
+            for key in ("role", "agency", "is_active", "extra_permissions", "revoked_permissions"):
+                if key in attrs and attrs[key] != {"role": target.role, "agency": target.agency, "is_active": self.instance.is_active,
+                                                   "extra_permissions": target.extra_permissions, "revoked_permissions": target.revoked_permissions}[key]:
+                    errors[key] = "Vous ne pouvez pas modifier ce réglage sur votre propre compte."
+        if target and target.role == Role.COMPANY_ADMIN and (role != Role.COMPANY_ADMIN or attrs.get("is_active") is False):
+            ensure_another_admin(target.tenant, exclude_user=self.instance)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
     def _check_perm_lists(self, attrs):
         for key in ("extra_permissions", "revoked_permissions"):
             unknown = set(attrs.get(key, [])) - ALL_PERMISSIONS
@@ -104,6 +140,9 @@ class UserSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated)
         Membership.objects.create(user=user, tenant=tenant, role=role, agency=agency,
                                   extra_permissions=extra, revoked_permissions=revoked)
+        if role == Role.DRIVER:  # fiche chauffeur liée d'office : le compte peut suivre ses voyages
+            from apps.fleet.models import Driver
+            Driver.objects.create(tenant=tenant, full_name=user.full_name or user.email, phone=user.phone, user=user)
         return user
 
     @transaction.atomic
@@ -113,6 +152,8 @@ class UserSerializer(serializers.ModelSerializer):
         for key in ("role", "agency", "extra_permissions", "revoked_permissions"):
             if key in validated:
                 setattr(m, key, validated.pop(key))
+        if "is_active" in validated:  # réactiver un compte réactive aussi son adhésion, sinon il ne pourrait pas se connecter
+            m.is_active = validated["is_active"]
         m.save()
         password = validated.pop("password", None)
         for k, v in validated.items():
@@ -121,6 +162,24 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+
+def ensure_another_admin(tenant, exclude_user):
+    others = Membership.objects.filter(tenant=tenant, role=Role.COMPANY_ADMIN, is_active=True, user__is_active=True).exclude(user=exclude_user)
+    if not others.exists():
+        raise serializers.ValidationError("Il doit rester au moins un administrateur actif dans la compagnie.")
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["current_password"]):
+            raise serializers.ValidationError({"current_password": "Mot de passe actuel incorrect."})
+        validate_password(attrs["new_password"], user)
+        return attrs
 
 
 def _enforce_plan_limit(tenant, field, current_count, label):

@@ -29,6 +29,7 @@ urlpatterns = [
     path("auth/refresh/", accounts.RefreshView.as_view()),
     path("auth/logout/", accounts.LogoutView.as_view()),
     path("auth/me/", accounts.MeView.as_view()),
+    path("auth/change-password/", accounts.ChangePasswordView.as_view()),
     path("company/profile/", accounts.CompanyProfileView.as_view()),
     path("company/audit/", accounts.AuditLogListView.as_view()),
     path("platform/metrics/", platform.PlatformMetricsView.as_view()),

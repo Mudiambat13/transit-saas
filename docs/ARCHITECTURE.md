@@ -20,6 +20,12 @@ Règles appliquées :
 ## Autorisations
 Matrice rôle → permissions granulaires (`apps/accounts/permissions.py`), ajustable par utilisateur (`extra_permissions` / `revoked_permissions` dans `Membership`). Chaque vue déclare `required_perms`. Le périmètre d'agence (responsable/agents rattachés à une agence) restreint voyages, billets et manifestes. Le frontend ne fait que masquer des éléments.
 
+### Gestion des comptes (délégation)
+- **Administrateur de compagnie** (`user.manage`) : crée, modifie, désactive tous les comptes de sa compagnie, définit le rôle, l'agence et les permissions particulières. Agence obligatoire pour un responsable d'agence et un agent de billetterie.
+- **Responsable d'agence** (`user.manage_team`) : gère uniquement les agents de billetterie, d'embarquement et chauffeurs **de son agence** ; l'agence est imposée par le serveur, il ne peut ni créer d'encadrement, ni accorder de permissions, ni voir les autres agences ; sans agence rattachée il ne gère personne.
+- Garde-fous : personne ne peut se désactiver, changer son rôle/agence ou ses permissions ; il reste toujours un administrateur actif ; réactiver un compte réactive son adhésion ; créer un compte chauffeur crée sa fiche chauffeur liée (suivi GPS).
+- Mot de passe : l'administrateur ou le responsable fixe un mot de passe provisoire ; chacun le change lui-même (page « Mon mot de passe », `POST /auth/change-password/`, mot de passe actuel exigé). Limite connue : pas de changement obligatoire à la première connexion, ni de révocation des sessions ouvertes après changement.
+
 ## Concurrence et intégrité
 - **Vente** : transaction atomique, `select_for_update` sur le voyage (sérialise les ventes concurrentes → capacité jamais dépassée), contrainte unique partielle `uniq_active_seat_per_trip` (un siège = un billet actif par voyage) comme garantie ultime en base.
 - **Scan** : verrou de ligne sur le billet + contrainte unique partielle `uniq_validated_boarding_per_ticket` ; en cas de course perdue, l'`IntegrityError` est converti en « déjà embarqué ». Clé d'idempotence côté client pour les rejeux réseau.

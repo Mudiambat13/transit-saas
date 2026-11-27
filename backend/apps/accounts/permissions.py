@@ -8,7 +8,7 @@ from .models import Role
 
 # Permissions granulaires (verbe métier).
 ALL_PERMISSIONS = {
-    "company.manage", "agency.manage", "user.manage", "fleet.manage", "fleet.view",
+    "company.manage", "agency.manage", "user.manage", "user.manage_team", "fleet.manage", "fleet.view",
     "trip.manage", "trip.view", "trip.reopen",
     "ticket.create", "ticket.view", "ticket.cancel", "ticket.reprint",
     "boarding.scan", "boarding.view",
@@ -24,6 +24,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         "ticket.create", "ticket.view", "ticket.cancel", "ticket.reprint",
         "boarding.view", "manifest.view", "manifest.generate", "manifest.finalize", "report.view",
         "tracking.manage", "tracking.view",
+        "user.manage_team",  # gère les agents, contrôleurs et chauffeurs de SON agence uniquement
     },
     Role.TICKET_AGENT: {"fleet.view", "trip.view", "ticket.create", "ticket.view", "ticket.reprint", "tracking.view"},
     Role.BOARDING_AGENT: {"trip.view", "boarding.scan", "boarding.view", "manifest.view"},

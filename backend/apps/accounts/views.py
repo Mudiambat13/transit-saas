@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -8,9 +9,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit import service as audit
 from apps.audit.models import AuditLog
 
-from .models import Membership, User
-from .permissions import HasTenantPermission
-from .serializers import CompanyProfileSerializer, LoginSerializer, UserSerializer, me_payload
+from .models import Membership, Role, User
+from .permissions import HasTenantPermission, permissions_for
+from .serializers import (
+    TEAM_ROLES, ChangePasswordSerializer, CompanyProfileSerializer, LoginSerializer, UserSerializer, ensure_another_admin, me_payload,
+)
 from .tenancy import TenantModelViewSet, get_tenant
 
 
@@ -95,12 +98,18 @@ class CompanyProfileView(APIView):
 class UserViewSet(TenantModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    required_perms = {"*": "user.manage"}
+    # `user.manage_team` : administrateur (tout) et responsable d'agence (son équipe). Le périmètre est appliqué ci-dessous.
+    required_perms = {"*": "user.manage_team"}
     search_fields = ["email", "full_name", "phone"]
 
     def get_queryset(self):
-        tenant = get_tenant(self.request)
-        return User.objects.filter(memberships__tenant=tenant).distinct().order_by("full_name")
+        m = self.request.user.membership
+        qs = User.objects.filter(memberships__tenant=m.tenant)
+        if "user.manage" not in permissions_for(m):
+            if m.agency_id is None:
+                return User.objects.none()
+            qs = User.objects.filter(memberships__tenant=m.tenant, memberships__agency=m.agency, memberships__role__in=TEAM_ROLES)
+        return qs.distinct().order_by("full_name")
 
     def perform_create(self, serializer):
         user = serializer.save()
@@ -112,10 +121,31 @@ class UserViewSet(TenantModelViewSet):
 
     def perform_destroy(self, instance):
         # Désactivation plutôt que suppression (traçabilité).
+        if instance.pk == self.request.user.pk:
+            raise ValidationError("Vous ne pouvez pas désactiver votre propre compte.")
+        target = instance.memberships.filter(tenant=get_tenant(self.request)).first()
+        if target and target.role == Role.COMPANY_ADMIN:
+            ensure_another_admin(target.tenant, exclude_user=instance)
         instance.is_active = False
         instance.save(update_fields=["is_active"])
         Membership.objects.filter(user=instance, tenant=get_tenant(self.request)).update(is_active=False)
         audit.log("user.deactivated", actor=self.request.user, tenant=get_tenant(self.request), entity="User", entity_id=instance.id)
+
+
+class ChangePasswordView(APIView):
+    """Changement de son propre mot de passe (mot de passe actuel exigé)."""
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+    def post(self, request):
+        ser = ChangePasswordSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        request.user.set_password(ser.validated_data["new_password"])
+        request.user.save(update_fields=["password"])
+        m = request.user.membership
+        audit.log("auth.password_changed", actor=request.user, tenant=m.tenant if m else None)
+        return Response({"ok": True})
 
 
 class AuditLogListView(APIView):

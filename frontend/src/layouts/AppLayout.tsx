@@ -14,6 +14,7 @@ import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
+import LockIcon from "@mui/icons-material/LockReset";
 import SettingsIcon from "@mui/icons-material/Settings";
 import MapIcon from "@mui/icons-material/Map";
 import GpsFixedIcon from "@mui/icons-material/GpsFixed";
@@ -36,7 +37,7 @@ const COMPANY: Item[] = [
   { to: "/tracking/live", label: "Suivi en direct", icon: <MapIcon />, perm: "tracking.view" },
   { to: "/fleet", label: "Flotte", icon: <BusIcon />, perm: "fleet.view" },
   { to: "/agencies", label: "Agences", icon: <StoreIcon />, perm: "agency.manage" },
-  { to: "/users", label: "Utilisateurs", icon: <PeopleIcon />, perm: "user.manage" },
+  { to: "/users", label: "Utilisateurs", icon: <PeopleIcon />, perm: "user.manage_team" },
   { to: "/audit", label: "Journal", icon: <HistoryIcon />, perm: "report.view" },
   { to: "/settings", label: "Compagnie", icon: <SettingsIcon />, perm: "company.manage" },
 ];
@@ -74,7 +75,11 @@ export default function AppLayout() {
       <Box sx={{ p: 2 }}>
         <Typography variant="body2" noWrap>{me?.full_name || me?.email}</Typography>
         <Chip size="small" label={platform ? "Super Admin" : (me?.role ? ROLE_LABELS[me.role] ?? me.role : "")} sx={{ mt: 0.5, bgcolor: "rgba(255,255,255,.18)", color: "white" }} />
-        <ListItemButton onClick={async () => { await logout(); nav("/login"); }} sx={{ mt: 1, borderRadius: 2, color: "inherit" }}>
+        <ListItemButton component={NavLink} to="/account/password" onClick={() => setOpen(false)} sx={{ mt: 1, borderRadius: 2, color: "inherit", "&.active": { bgcolor: "rgba(255,255,255,.18)" } }}>
+          <ListItemIcon sx={{ color: "inherit", minWidth: 36 }}><LockIcon fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Mon mot de passe" />
+        </ListItemButton>
+        <ListItemButton onClick={async () => { await logout(); nav("/login"); }} sx={{ borderRadius: 2, color: "inherit" }}>
           <ListItemIcon sx={{ color: "inherit", minWidth: 36 }}><LogoutIcon fontSize="small" /></ListItemIcon>
           <ListItemText primary="Se déconnecter" />
         </ListItemButton>

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Paper, Stack, Typography } from "@mui/material";
+import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
+import NavigationIcon from "@mui/icons-material/Navigation";
 import GpsFixedIcon from "@mui/icons-material/GpsFixed";
 import { ApiError, get, post } from "../../services/api";
 import { ago, ConfirmDialog, ErrorBox, fmtDateTime, Loading, useLoad } from "../../components/common";
 import { useAuth } from "../../services/auth";
+import MapView from "../../components/MapView";
 import { enqueue, flushQueue, FLUSH_EVERY_MS, toPoint, trackerStore } from "../../services/trackerEngine";
 
 interface MyTrip { id: number; reference: string; route: string; departure_at: string; status: string; bus: string; tracking_active: boolean }
@@ -25,16 +28,24 @@ export default function DriverTrackingPage() {
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
   const [, tick] = useState(0);
+  const [speed, setSpeed] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
+  const [path, setPath] = useState<[number, number][]>([]);
+  const [sentTotal, setSentTotal] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [log, setLog] = useState<{ t: string; text: string; kind: "ok" | "warn" | "err" }[]>([]);
+  const pushLog = useCallback((text: string, kind: "ok" | "warn" | "err" = "ok") => setLog((l) => [{ t: new Date().toISOString(), text, kind }, ...l].slice(0, 6)), []);
   const lastRecorded = useRef<number | null>(null);
   const watchId = useRef<number | null>(null);
   const wakeLock = useRef<any>(null);
 
   useEffect(() => {
-    const on = () => setOnline(true), off = () => setOnline(false);
+    const on = () => { setOnline(true); pushLog("Réseau retrouvé : envoi des positions en attente"); }, off = () => { setOnline(false); pushLog("Réseau perdu : positions gardées sur le téléphone", "warn"); };
     window.addEventListener("online", on); window.addEventListener("offline", off);
     const t = setInterval(() => tick((n) => n + 1), 10_000);   // rafraîchit « il y a X min »
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); clearInterval(t); };
-  }, []);
+  }, [pushLog]);
 
   const releaseWake = () => { try { wakeLock.current?.release(); } catch { /* ignoré */ } wakeLock.current = null; };
   const acquireWake = useCallback(async () => {
@@ -50,13 +61,17 @@ export default function DriverTrackingPage() {
   const startWatching = useCallback((trip: number) => {
     if (!window.isSecureContext) { setGps("insecure"); return; }
     if (!("geolocation" in navigator)) { setGps("unavailable"); return; }
-    setRunning(trip); setGps("waiting"); setQueued(trackerStore.load(trip).length);
+    setRunning(trip); setGps("waiting"); setStartedAt((t) => t ?? Date.now()); setQueued(trackerStore.load(trip).length);
     lastRecorded.current = null;
     acquireWake();
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGps("ok"); setLastFix(new Date(pos.timestamp).toISOString());
-        if (enqueue(trip, toPoint(pos), lastRecorded.current)) { lastRecorded.current = Date.now(); setQueued(trackerStore.load(trip).length); }
+        setSpeed(pos.coords.speed != null ? Math.round(pos.coords.speed * 3.6) : null); setAccuracy(Math.round(pos.coords.accuracy)); setHeading(pos.coords.heading);
+        if (enqueue(trip, toPoint(pos), lastRecorded.current)) {
+          lastRecorded.current = Date.now(); setQueued(trackerStore.load(trip).length);
+          setPath((p) => [...p, [pos.coords.latitude, pos.coords.longitude] as [number, number]].slice(-120));
+        }
       },
       (err) => setGps(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"),
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 30_000 },
@@ -73,8 +88,9 @@ export default function DriverTrackingPage() {
       const r = await flushQueue(running, token);
       if (!alive) return;
       setQueued(trackerStore.load(running).length);
-      if (r.status === "sent") { setLastSent(new Date().toISOString()); setError(null); }
-      if (r.status === "ended") { setNotice(r.reason); stopLocal(running, true); trips.reload(); }
+      if (r.status === "sent") { setLastSent(new Date().toISOString()); setError(null); setSentTotal((n) => n + r.sent); pushLog(`${r.sent} position(s) envoyée(s)`); }
+      if (r.status === "offline") pushLog(`Envoi impossible : ${r.remaining} position(s) en attente`, "warn");
+      if (r.status === "ended") { pushLog("Suivi terminé par le serveur", "warn"); setNotice(r.reason); stopLocal(running, true); trips.reload(); }
       if (r.status === "invalid_token") { setError("Ce téléphone n'est plus autorisé à suivre ce voyage (remplacé par un autre appareil ?). Redémarrez le suivi."); stopLocal(running, true); trips.reload(); }
     };
     const id = setInterval(send, FLUSH_EVERY_MS);
@@ -125,7 +141,7 @@ export default function DriverTrackingPage() {
     const token = trackerStore.getToken(trip);
     if (token) await flushQueue(trip, token);
     try { await post(`/trips/${trip}/tracking/stop/`); } catch { /* le serveur arrêtera à la fin du voyage */ }
-    stopLocal(trip, true); setConfirmStop(false); setNotice("Suivi arrêté."); trips.reload();
+    stopLocal(trip, true); setConfirmStop(false); setNotice("Suivi arrêté."); setStartedAt(null); setPath([]); setSentTotal(0); setLog([]); trips.reload();
   };
 
   if (trips.loading && !trips.data) return <Loading />;
@@ -149,9 +165,20 @@ export default function DriverTrackingPage() {
         <Paper sx={{ p: 2.5 }}>
           {!list.length ? <Alert severity="info">Aucun voyage à suivre pour le moment. Un voyage doit être ouvert, en embarquement ou clôturé (en route), et vous devez y être affecté.</Alert> : (
             <Stack spacing={2}>
-              <TextField select size="small" label="Voyage" value={tripId} onChange={(e) => setTripId(Number(e.target.value))}>
-                {list.map((t) => <MenuItem key={t.id} value={t.id}>{t.reference} · {t.route} · {fmtDateTime(t.departure_at, me?.tenant?.timezone)}{t.tracking_active ? " (suivi actif)" : ""}</MenuItem>)}
-              </TextField>
+              <Typography fontWeight={700}>Choisissez le voyage à suivre</Typography>
+              {list.map((t) => (
+                <Paper key={t.id} variant="outlined" onClick={() => setTripId(t.id)} role="button" aria-pressed={tripId === t.id}
+                  sx={{ p: 1.5, cursor: "pointer", borderWidth: 2, borderColor: tripId === t.id ? "primary.main" : "divider", bgcolor: tripId === t.id ? "action.selected" : "background.paper" }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <DirectionsBusIcon color={tripId === t.id ? "primary" : "action"} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography fontWeight={700}>{t.route}</Typography>
+                      <Typography variant="body2" color="text.secondary">{t.reference} · bus {t.bus} · {fmtDateTime(t.departure_at, me?.tenant?.timezone)}</Typography>
+                    </Box>
+                    {t.tracking_active && <Chip size="small" color="warning" label="Suivi actif" />}
+                  </Stack>
+                </Paper>
+              ))}
               <Alert severity="warning" icon={<GpsFixedIcon />}>
                 Branchez le téléphone, <b>gardez cet écran allumé</b> et cette page ouverte pendant tout le trajet. Si vous verrouillez le téléphone ou ouvrez une autre application, la localisation s'interrompt : pour un suivi fiable écran verrouillé, utilisez l'application Android « Transit Suivi ».
               </Alert>
@@ -161,23 +188,66 @@ export default function DriverTrackingPage() {
           )}
         </Paper>
       ) : (
-        <Paper sx={{ p: 2.5 }}>
-          <Stack spacing={1.5}>
-            <Typography fontWeight={700}>{current ? `${current.reference} · ${current.route}` : "Voyage en cours"}</Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip label={gpsInfo[gps].text} color={gpsInfo[gps].color} />
-              <Chip label={online ? "Réseau OK" : "Hors réseau"} color={online ? "success" : "warning"} variant="outlined" />
-              <Chip label={`En attente d'envoi : ${queued}`} color={queued > 20 ? "warning" : "default"} variant="outlined" />
+        <Stack spacing={1.5}>
+          <Paper sx={{ p: 2, bgcolor: gps === "ok" ? "#14532d" : "#78350f", color: "white" }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+              <Box>
+                <Typography fontWeight={800} fontSize={18}>{current ? current.route : "Voyage en cours"}</Typography>
+                <Typography variant="body2" sx={{ opacity: 0.85 }}>{current ? `${current.reference} · bus ${current.bus}` : ""}{startedAt ? ` · depuis ${Math.max(1, Math.round((Date.now() - startedAt) / 60000))} min` : ""}</Typography>
+              </Box>
+              <Chip size="small" label={gpsInfo[gps].text} sx={{ bgcolor: "rgba(255,255,255,.2)", color: "white", fontWeight: 700 }} />
             </Stack>
-            <Typography variant="body2">Dernière position lue : <b>{ago(lastFix)}</b></Typography>
-            <Typography variant="body2">Dernier envoi réussi : <b>{lastSent ? ago(lastSent) : "—"}</b></Typography>
-            {!online && <Alert severity="warning">Pas de réseau : les positions sont gardées sur le téléphone et seront envoyées au retour du signal.</Alert>}
-            {gps === "denied" && <Alert severity="error">Autorisez la localisation pour ce site dans les réglages du navigateur, puis redémarrez le suivi.</Alert>}
-            {gps === "insecure" && <Alert severity="error">La localisation exige une connexion sécurisée (HTTPS). Contactez votre administrateur.</Alert>}
-            {hiddenWarning && <Alert severity="warning" onClose={() => setHiddenWarning(false)}>L'écran a été quitté : des positions ont pu être manquées. Gardez cette page ouverte et l'écran allumé.</Alert>}
-            <Button color="error" variant="outlined" onClick={() => setConfirmStop(true)}>Arrêter le suivi</Button>
+            <Stack direction="row" alignItems="flex-end" spacing={2} sx={{ mt: 1.5 }}>
+              <Box>
+                <Typography fontSize={56} fontWeight={800} lineHeight={1}>{speed ?? "—"}</Typography>
+                <Typography variant="body2" sx={{ opacity: 0.85 }}>km/h</Typography>
+              </Box>
+              <Box sx={{ flex: 1 }} />
+              <Stack alignItems="center" sx={{ opacity: heading != null ? 1 : 0.4 }}>
+                <NavigationIcon sx={{ fontSize: 34, transform: `rotate(${heading ?? 0}deg)`, transition: "transform .6s" }} />
+                <Typography variant="caption">{heading != null ? `${Math.round(heading)}°` : "cap ?"}</Typography>
+              </Stack>
+              <Box sx={{ textAlign: "right" }}>
+                <Typography fontWeight={700}>{accuracy != null ? `±${accuracy} m` : "—"}</Typography>
+                <Typography variant="caption" sx={{ opacity: 0.85 }}>précision GPS</Typography>
+              </Box>
+            </Stack>
+          </Paper>
+
+          <Stack direction="row" spacing={1}>
+            {[{ v: sentTotal, l: "envoyées" }, { v: queued, l: "en attente", warn: queued > 0 }, { v: online ? "OK" : "Hors", l: "réseau", warn: !online }].map((k) => (
+              <Paper key={k.l} sx={{ flex: 1, p: 1, textAlign: "center", border: k.warn ? "1px solid #f59e0b" : "1px solid transparent" }}>
+                <Typography fontWeight={800} fontSize={20} color={k.warn ? "warning.main" : "text.primary"}>{k.v}</Typography>
+                <Typography variant="caption" color="text.secondary">{k.l}</Typography>
+              </Paper>
+            ))}
           </Stack>
-        </Paper>
+
+          {!online && <Alert severity="warning">Pas de réseau : les positions sont gardées sur le téléphone et seront envoyées au retour du signal.</Alert>}
+          {gps === "denied" && <Alert severity="error">Autorisez la localisation pour ce site dans les réglages du navigateur, puis redémarrez le suivi.</Alert>}
+          {gps === "insecure" && <Alert severity="error">La localisation exige une connexion sécurisée (HTTPS). Contactez votre administrateur.</Alert>}
+          {hiddenWarning && <Alert severity="warning" onClose={() => setHiddenWarning(false)}>L'écran a été quitté : des positions ont pu être manquées. Gardez cette page ouverte et l'écran allumé.</Alert>}
+
+          {path.length > 0 && (
+            <Paper sx={{ p: 1 }}>
+              <MapView markers={[{ id: "me", lat: path[path.length - 1][0], lon: path[path.length - 1][1], label: "Vous êtes ici", selected: true, heading }]} trail={path} height={200} fitKey="me" follow />
+            </Paper>
+          )}
+
+          <Paper sx={{ p: 1.5 }}>
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>Journal</Typography>
+            {!log.length ? <Typography variant="body2" color="text.secondary">En attente du premier envoi…</Typography> : log.map((e, i) => (
+              <Stack key={i} direction="row" spacing={1} alignItems="center">
+                <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: e.kind === "ok" ? "success.main" : e.kind === "warn" ? "warning.main" : "error.main" }} />
+                <Typography variant="body2" sx={{ flex: 1 }}>{e.text}</Typography>
+                <Typography variant="caption" color="text.secondary">{new Date(e.t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</Typography>
+              </Stack>
+            ))}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>Dernière position lue {ago(lastFix)} · dernier envoi {lastSent ? ago(lastSent) : "—"}</Typography>
+          </Paper>
+
+          <Button color="error" variant="outlined" size="large" onClick={() => setConfirmStop(true)}>Arrêter le suivi</Button>
+        </Stack>
       )}
       <ConfirmDialog open={confirmStop} danger title="Arrêter le suivi ?" text="La compagnie et les passagers ne verront plus la position du bus tant que le suivi n'est pas relancé." confirmLabel="Arrêter" onClose={() => setConfirmStop(false)} onConfirm={stop} />
     </Box>

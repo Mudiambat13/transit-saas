@@ -194,3 +194,18 @@ def purge_old_points(days):
     cutoff = timezone.now() - timedelta(days=days)
     n, _ = LocationPoint.objects.filter(recorded_at__lt=cutoff).delete()
     return n
+
+
+def trip_stats(points):
+    """Statistiques d'un parcours à partir de points valides triés par date : distance, durée, vitesses."""
+    if not points:
+        return {"distance_km": 0.0, "duration_min": 0, "avg_speed_kmh": None, "max_speed_kmh": None, "started_at": None, "points": 0}
+    dist = sum(haversine_km(a.lat, a.lon, b.lat, b.lon) for a, b in zip(points, points[1:]))
+    minutes = (points[-1].recorded_at - points[0].recorded_at).total_seconds() / 60
+    speeds = [p.speed_kmh for p in points if p.speed_kmh is not None]
+    return {
+        "distance_km": round(dist, 1), "duration_min": round(minutes),
+        "avg_speed_kmh": round(dist / (minutes / 60)) if minutes >= 1 else None,  # moyenne réelle (arrêts compris), pas celle des relevés
+        "max_speed_kmh": round(max(speeds)) if speeds else None,
+        "started_at": points[0].recorded_at, "points": len(points),
+    }
